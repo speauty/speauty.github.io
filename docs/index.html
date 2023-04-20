@@ -14,7 +14,6 @@
   <link rel="stylesheet" href="./assets/scripts/css/vue.min.css">
   <link rel="stylesheet" href="./assets/scripts/css/boot.css">
   <link rel="stylesheet" href="./assets/scripts/plugins/toc/toc.min.css">
-
 </head>
 <body>
   <div id="app">
@@ -37,7 +36,6 @@
       coverpage: false,
       onlyCover: false,
       auto2top: true,
-      formatUpdated: '{YYYY}-{MM}-{DD} {HH}:{mm}:{ss}',
       themeColor: '#EFC4CE',
       search: {
         maxAge: 86400000,
@@ -59,7 +57,7 @@
       },
       toc: {
         scope: '.markdown-section',
-        headings: 'h1, h2, h3, h4, h5, h6',
+        headings: 'h1, h2, h3, h4, h5',
         title: '导航',
       },
       count:{
@@ -72,6 +70,15 @@
           position: "top",
           color: "var(--theme-color,#42b983)",
           height: "3px",
+      },
+      plantuml: {
+        skin: 'default',
+      },
+      baiduTjId: "2e77aa142b95360d8b0936d797bcb56d",
+      timeUpdater: {
+        text: "> 更新时间: {docsify-updated}",
+        formatUpdated: "{YYYY}-{MM}-{DD} {HH}:{mm}:{ss}",
+        whereToPlace: "bottom",
       },
       plugins: [
         function(hook) {
@@ -92,7 +99,9 @@
     }
   </script>
   <script src="./assets/scripts/js/docsify.min.js"></script>
+  
   <!-- 代码高亮插件组 https://prismjs.com/ -->
+  <!-- https://github.com/PrismJS/prism/tree/master/components -->
   <script src="./assets/scripts/js/prism/prism-bash.min.js"></script>
   <script src="./assets/scripts/js/prism/prism-php.min.js"></script>
   <script src="./assets/scripts/js/prism/prism-php-extras.min.js"></script>
@@ -116,21 +125,18 @@
   <script src="./assets/scripts/plugins/click_heart.min.js"></script>
   <!-- 阅读进度条(好像有点儿问题) -->
   <script src="./assets/scripts/plugins/progress.min.js"></script>
+  <!-- PlatUML插件 https://github.com/imyelo/docsify-plantuml -->
+  <!-- PlatUML官方文档 https://plantuml.com/zh/activity-diagram-legacy -->
+  <script src="./assets/scripts/plugins/docsify-plantuml.min.js"></script>
+  <!-- 百度统计插件 -->
+  <script src="./assets/scripts/plugins/docsify-baidu-tj.min.js"></script>
+  <!-- 文档更新时间插件 -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify-updated/src/time-updater.min.js"></script>
 
   <script>
     if (typeof navigator.serviceWorker !== 'undefined') {
       navigator.serviceWorker.register('./assets/scripts/js/sw.js')
     }
-  </script>
-
-  <script>
-    var _hmt = _hmt || [];
-    (function() {
-      var hm = document.createElement("script");
-      hm.src = "https://hm.baidu.com/hm.js?2e77aa142b95360d8b0936d797bcb56d";
-      var s = document.getElementsByTagName("script")[0]; 
-      s.parentNode.insertBefore(hm, s);
-    })();
   </script>
     
 </body>
