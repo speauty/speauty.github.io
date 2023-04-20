@@ -2,3 +2,7 @@
 .pagination-item-title {
     font-size: 1.2em!important;
 }
+
+body {
+    cursor: default;
+}
