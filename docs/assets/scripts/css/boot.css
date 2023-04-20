@@ -1,0 +1,4 @@
+/* reset pagination title font-size */
+.pagination-item-title {
+    font-size: 1.2em!important;
+}
