@@ -1,9 +1,5 @@
 * [者也](/README.md)
 * 猿人类
-   * [深入理解Gin的实现](./articles/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3Gin%E7%9A%84%E5%AE%9E%E7%8E%B0.md)
-   * 语言
-      * [来自PHP的实习生](/articles/prog.language.php.md)
-      * [来自Golang的实习生](/articles/prog.language.go.md)
-   * 其他
-      * [和mkcert的初遇](/articles/conf.ssl.md)
-      * [初遇jenkins](/articles/conf.jenkins.md)
+   * [深入理解Gin的实现](/articles/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3Gin%E7%9A%84%E5%AE%9E%E7%8E%B0.md)
+
+* [开源项目](/articles/opensource.md)
