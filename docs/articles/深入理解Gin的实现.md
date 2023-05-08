@@ -669,9 +669,269 @@ type nodeValue struct {
 ```golang
 // tree.go
 
-// 待更新。。。
+// 这是已经定位到方法树的根节点上，通过前缀，一层层剥离匹配。。。
+func (n *node) getValue(path string, params *Params, skippedNodes *[]skippedNode, unescape bool) (value nodeValue) {
+	var globalParamsCount int16
+
+walk:
+	for {
+		prefix := n.path
+		// 查询路径为当前节点的子节点
+		if len(path) > len(prefix) {
+			// 确实前缀匹配，那就截断更新查询路径
+			if path[:len(prefix)] == prefix {
+				path = path[len(prefix):]
+
+				// 通过索引字符，尝试匹配非通配子节点
+				idxc := path[0]
+				for i, c := range []byte(n.indices) {
+					if c == idxc {
+						if n.wildChild {
+							index := len(*skippedNodes)
+							*skippedNodes = (*skippedNodes)[:index+1]
+							(*skippedNodes)[index] = skippedNode{
+								path: prefix + path,
+								node: &node{
+									path:      n.path,
+									wildChild: n.wildChild,
+									nType:     n.nType,
+									priority:  n.priority,
+									children:  n.children,
+									handlers:  n.handlers,
+									fullPath:  n.fullPath,
+								},
+								paramsCount: globalParamsCount,
+							}
+						}
+
+						n = n.children[i]
+						continue walk
+					}
+				}
+
+				if !n.wildChild { // 当前节点不是通配节点
+					if path != "/" {
+						for length := len(*skippedNodes); length > 0; length-- {
+							skippedNode := (*skippedNodes)[length-1]
+							*skippedNodes = (*skippedNodes)[:length-1]
+							if strings.HasSuffix(skippedNode.path, path) {
+								path = skippedNode.path
+								n = skippedNode.node
+								if value.params != nil {
+									*value.params = (*value.params)[:skippedNode.paramsCount]
+								}
+								globalParamsCount = skippedNode.paramsCount
+								continue walk
+							}
+						}
+					}
+
+					value.tsr = path == "/" && n.handlers != nil
+					return
+				}
+
+				// 直接定位到通配子节点(最后一个节点)
+				n = n.children[len(n.children)-1]
+				globalParamsCount++
+
+				switch n.nType {
+				case param: // 参数节点
+					// 计算查询路径查询结束位置(匹配到/或路径结尾)
+					end := 0
+					for end < len(path) && path[end] != '/' {
+						end++
+					}
+
+					// 保存参数值
+					if params != nil && cap(*params) > 0 {
+						if value.params == nil {
+							value.params = params
+						}
+						// 在预分配的容量内扩展切片
+						i := len(*value.params)
+						*value.params = (*value.params)[:i+1]
+						val := path[:end]
+						if unescape { // 需要反转义(解码)
+							if v, err := url.QueryUnescape(val); err == nil {
+								val = v
+							}
+						}
+						(*value.params)[i] = Param{
+							Key:   n.path[1:],
+							Value: val,
+						}
+					}
+
+					if end < len(path) {
+						// 继续深入迭代
+						if len(n.children) > 0 {
+							path = path[end:]
+							n = n.children[0]
+							continue walk
+						}
+
+						value.tsr = len(path) == end+1
+						return
+					}
+
+					if value.handlers = n.handlers; value.handlers != nil {
+						value.fullPath = n.fullPath
+						return
+					}
+					if len(n.children) == 1 { // 检测是否存在/子节点
+						n = n.children[0]
+						value.tsr = (n.path == "/" && n.handlers != nil) || (n.path == "" && n.indices == "/")
+					}
+					return
+
+				case catchAll: // 全匹配节点 *
+
+					if params != nil { // 保存参数值
+						// ... ...
+					}
+
+					value.handlers = n.handlers
+					value.fullPath = n.fullPath
+					return
+
+				default:
+					panic("invalid node type")
+				}
+			}
+		}
+
+		// 查询路径已经匹配到当前节点
+		if path == prefix {
+			// 如果当前节点句柄链为空，并且查询路径不是/，那就需要回退到上一个路径节点，继续walk循环
+			if n.handlers == nil && path != "/" {
+				for length := len(*skippedNodes); length > 0; length-- {
+					// ... ...
+				}
+			}
+			
+			// 检测当前节点是否注册句柄链
+			if value.handlers = n.handlers; value.handlers != nil {
+				value.fullPath = n.fullPath
+				return
+			}
+
+			// 当前路由没有句柄链
+			if path == "/" && n.wildChild && n.nType != root {
+				value.tsr = true
+				return
+			}
+
+			if path == "/" && n.nType == static {
+				value.tsr = true
+				return
+			}
+
+			// 检测是否存在/子节点
+			for i, c := range []byte(n.indices) {
+				if c == '/' {
+					n = n.children[i]
+					value.tsr = (len(n.path) == 1 && n.handlers != nil) ||
+						(n.nType == catchAll && n.children[0].handlers != nil)
+					return
+				}
+			}
+
+			return
+		}
+
+		// 没匹配到当前节点，检测一下，是否/
+		value.tsr = path == "/" ||
+			(len(prefix) == len(path)+1 && prefix[len(path)] == '/' &&
+				path == prefix[:len(prefix)-1] && n.handlers != nil)
+
+		// 回退到最后一个有效的路径节点（不存在尾斜杠的情况）
+		// 用匹配到路径节点信息更新当前的查询路径，节点等。。。继续外循环walk
+		if !value.tsr && path != "/" {
+			for length := len(*skippedNodes); length > 0; length-- {
+				// ... ...
+			}
+		}
+
+		return
+	}
+}
 
 ```
+
+#### 小结
+
+个人觉得，还差点什么，先挖个坑在这儿。
+
+### 中间件的本质
+
+应该听说过洋葱模型吧，一层一层，中间件就夹在其间，有点切面（感觉和AOP很像，但又说不清楚区别）的感觉？其实，就是那样的，如果要执行一个操作，可以在之前或之后加个切面（这里就是中间件），也就是经常提到的前置|后置中间件。在`gin`中的具体表现为一个个句柄，在路由实际句柄之前或之后调用，是不是很简单，就来看看吧。首先通过`(*RouterGroup).Use()`来注册中间件：
+
+```golang
+// routergroup.go
+
+// 向路由组添加中间件, 也就是处理句柄, 直接追加到当前路由组的句柄集（Handlers）上
+func (group *RouterGroup) Use(middleware ...HandlerFunc) IRoutes {
+	group.Handlers = append(group.Handlers, middleware...)
+	return group.returnObj()
+}
+```
+
+`(*gin.Engine)`也内嵌了`RouterGroup`，所以也可以用`Use`，不过这个路由组比较特殊，被标记为了`root`。回顾下之前的添加路由，有提到在`(*gin.RouterGroup).handle()`中合并了句柄，才调用`(*gin.Engine).addRoute()`，其中合并句柄的方法就是`(*gin.RouterGroup).combineHandlers()`，具体如下：
+
+```golang
+// routergroup.go
+
+// 合并处理句柄，先路由组的句柄链，然后才是路由的句柄
+func (group *RouterGroup) combineHandlers(handlers HandlersChain) HandlersChain {
+	finalSize := len(group.Handlers) + len(handlers)
+	// 其中abortIndex就是math.MaxInt8 >> 1，也就是63
+	// 这里可以看出，句柄集最大数量63的限制
+	assert1(finalSize < int(abortIndex), "too many handlers")
+	mergedHandlers := make(HandlersChain, finalSize)
+	copy(mergedHandlers, group.Handlers)
+	copy(mergedHandlers[len(group.Handlers):], handlers)
+	return mergedHandlers
+}
+```
+
+看到这里，突然想到了，全局中间件（只是根据应用范围的一个简单划分，对应的就是局部中间件，针对单个路由组），就是通过`(*gin.Engine).Use()`添加的中间件，这才能被一级级路由合并。是的，源码就是如此：
+
+```golang
+// gin.go
+
+// 这就是注册全局中间件的方法，内部还是调用的(*gin.RouterGroup).Use()
+// 另外还附带注册自定义的404和405处理句柄
+func (engine *Engine) Use(middleware ...HandlerFunc) IRoutes {
+	engine.RouterGroup.Use(middleware...)
+	engine.rebuild404Handlers()
+	engine.rebuild405Handlers()
+	return engine
+}
+```
+
+在使用 `(*gin.Engine).Default()`初始化引擎时，会自动挂载`Logger()`和`Recovery()`两个全局中间件。
+
+注册局部中间件实际上是一样的，只不过目标路由组不是`root`标记而已，当然也不会附带注册其他中间件，直接就是前面提到的`(*RouterGroup).Use()`方法。
+
+所以，总的来说，中间件总是在路由实际句柄链之前，前置好理解，依次调用触发即可，那么后置呢？这里顺便看下调用的地方，也就是`(*gin.Context).Next()`：
+
+```golang
+// context.go
+
+// 就这样，一个for搞定，不过还是要记录游标，IsAborted()中还是有判断句柄是否过多
+func (c *Context) Next() {
+	c.index++
+	for c.index < int8(len(c.handlers)) {
+		// 直接传入Context作为参数
+		c.handlers[c.index](c)
+		c.index++
+	}
+}
+```
+
+那么，前置中间件，依次调用即可（先执行操作，再调用`c.Next()`），先入先出的顺序。后置中间件呢，没错，就是先调用`c.Next()`，然后再执行其他操作，要注意的是，这里是先入后出的顺序。
+
+另外，在中间件中使用协程时，要使用`Context`的副本哦（有`Copy()`方法），好像被坑过一次（主要还是理解不到位），在前置中间件中获取当前请求参数然后协程存储来着，读取出来之后，实际的路由句柄那里就没有了。简单来说，中间件把请求报文取走了？有兴趣的可以试试。
 
 
 
