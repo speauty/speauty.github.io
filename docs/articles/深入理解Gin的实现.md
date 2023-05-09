@@ -933,10 +933,96 @@ func (c *Context) Next() {
 
 另外，在中间件中使用协程时，要使用`Context`的副本哦（有`Copy()`方法），好像被坑过一次（主要还是理解不到位），在前置中间件中获取当前请求参数然后协程存储来着，读取出来之后，实际的路由句柄那里就没有了。简单来说，中间件把请求报文取走了？有兴趣的可以试试。
 
-### `http.Handler`的实现
+### Http请求
 
-分析中。。。
+通过实现`server.Handler`接口，也就是`*(gin.Engine).ServeHTTP()`，提供处理请求的能力。其中使用自定义的`gin.Context`数据结构，维持单次请求的上下文环境。不管如何，先来看看那个接口的实现：
 
+```golang
+// gin.go
+
+func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// 获取对象池中的*Context。复用上下文，有效降低GC的压力
+	c := engine.pool.Get().(*Context)
+
+	// 初始化响应和请求
+	c.writermem.reset(w)
+	c.Request = req
+	// 重置
+	c.reset()
+
+	engine.handleHTTPRequest(c)
+	// 归还对象
+	engine.pool.Put(c)
+}
+
+```
+
+看起来，这块比较简单，初始化和重置，以及对`*(gin.Engine).handleHTTPRequest()`的包装：
+
+```golang
+// gin.go
+
+func (engine *Engine) handleHTTPRequest(c *Context) {
+	// 要定位方法树，这里先提前取出来
+	httpMethod := c.Request.Method
+	// 如果启用了UseRawPath，并且原始路径存在
+	// 那么rPath就是c.Request.URL.RawPath
+	rPath := c.Request.URL.Path
+	unescape := false // 联合UseRawPath和UnescapePathValues
+	// ... ...
+
+	t := engine.trees
+	for i, tl := 0, len(t); i < tl; i++ {
+		if t[i].method != httpMethod {
+			continue
+		}
+		
+		root := t[i].root
+		// 定位路由节点
+		value := root.getValue(rPath, c.params, c.skippedNodes, unescape)
+		
+		if value.params != nil {
+			c.Params = *value.params
+		}
+
+		if value.handlers != nil {
+			c.handlers = value.handlers
+			c.fullPath = value.fullPath
+			// 这里就在调用句柄链了
+			c.Next()
+			c.writermem.WriteHeaderNow()
+			return
+		}
+
+		if httpMethod != http.MethodConnect && rPath != "/" {
+			// 重定向到path/路由或者重定向到修复路由
+			// ... ...
+		}
+		break
+	}
+
+	// 如果设置了HandleMethodNotAllowed。。。
+	if engine.HandleMethodNotAllowed {
+		for _, tree := range engine.trees {
+			if tree.method == httpMethod {
+				continue
+			}
+			if value := tree.root.getValue(rPath, nil, c.skippedNodes, unescape); value.handlers != nil {
+				c.handlers = engine.allNoMethod
+				serveError(c, http.StatusMethodNotAllowed, default405Body)
+				return
+			}
+		}
+	}
+	// 这里就是倔强的404了
+	c.handlers = engine.allNoRoute
+	serveError(c, http.StatusNotFound, default404Body)
+}
+```
+
+### 写在最后
+
+好像差不多了，但是，似乎，又少了点什么。。。不过，后面应该会持续关注的。
 
 ### 参考资料
 
